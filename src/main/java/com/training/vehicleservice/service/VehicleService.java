@@ -6,17 +6,19 @@ import com.training.vehicleservice.Exception.VehicleNotFoundException;
 import com.training.vehicleservice.entity.Fleet;
 import com.training.vehicleservice.entity.Vehicle;
 import com.training.vehicleservice.mapstruct.VehicleMapper;
-import com.training.vehicleservice.pojo.VehicleRequest;
 import com.training.vehicleservice.repository.FleetRepository;
 import com.training.vehicleservice.repository.VehicleRepository;
+import org.apache.poi.ss.usermodel.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
-import java.util.Optional;
+import java.io.IOException;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class VehicleService {
@@ -148,5 +150,101 @@ public class VehicleService {
                     ErrorCode.DUPLICATE_REGISTRATION_NUMBER, HttpStatus.BAD_REQUEST);
     }
 
+
+    public void processUploadFile(MultipartFile file) throws IOException {
+        try(Workbook workbook= WorkbookFactory.create(file.getInputStream())){
+            //Process the Excel workbook
+            Iterator<Sheet> sheetIterator = workbook.sheetIterator();
+            while(sheetIterator.hasNext())
+            {
+                Sheet sheet=sheetIterator.next();
+                processSheet(sheet);
+            }
+
+
+        }
+
+    }
+
+    private void processSheet(Sheet sheet)
+    {
+        switch (sheet.getSheetName())
+        {
+            case "create_vehicle":
+                processCreateSheet(sheet);
+        }
+    }
+
+    private List<Vehicle> processCreateSheet(Sheet sheet)
+    {
+        Iterator<Row> rowIterator = sheet.rowIterator();
+        rowIterator.next();
+
+        List<Vehicle> allVehicles=new ArrayList<>();
+
+        while(rowIterator.hasNext())
+        {
+            Row row = rowIterator.next();
+            allVehicles.add(processCreateSheetCell(row));
+
+        }
+
+        Map<String, List<Vehicle>> collect = allVehicles.stream().collect(Collectors.groupingBy(v -> v.getFleet().getRoute()));
+
+        for(Map.Entry<String,List<Vehicle>> entry: collect.entrySet())
+        {
+            Optional<Fleet> byRoute = fleetRepository.findByRoute(entry.getKey());
+            if(byRoute.isPresent())
+            {
+                byRoute.get().setCount(byRoute.get().getCount()+entry.getValue().size());
+                //set byRoute to every vehicle and save all
+                setRouteToAllVehicleList(entry.getValue(),byRoute.get());
+            }
+        }
+
+        return allVehicles;
+    }
+
+    private void setRouteToAllVehicleList(List<Vehicle> value, Fleet byRoute) {
+
+        //value.stream().map(v -> v.setFleet(byRoute))
+        for(Vehicle v:value)
+        {
+            v.setFleet(byRoute);
+        }
+        vehicleRepository.saveAll(value);
+    }
+
+    private Vehicle processCreateSheetCell(Row row)
+    {
+        Iterator<Cell> cellIterator = row.cellIterator();
+        Vehicle vehicle=new Vehicle();
+
+        while (cellIterator.hasNext())
+        {
+            Cell cell=cellIterator.next();
+            int columnIndex=cell.getColumnIndex();
+            switch (columnIndex)
+            {
+                case 0:
+                    vehicle.setModel(cell.getStringCellValue());
+                    break;
+                case 1:
+                    vehicle.setRegistrationNumber(cell.getStringCellValue());
+                    break;
+                case 2:
+                    vehicle.setStyle(cell.getStringCellValue());
+                    break;
+                case 3:
+                    Fleet fleet=new Fleet();
+                    fleet.setRoute(cell.getStringCellValue());
+                    vehicle.setFleet(fleet);
+                    break;
+
+            }
+        }
+        return  vehicle;
+
+    }
 
 }

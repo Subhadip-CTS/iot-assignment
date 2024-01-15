@@ -5,14 +5,17 @@ import com.training.vehicleservice.Exception.VehicleNotFoundException;
 import com.training.vehicleservice.entity.Vehicle;
 import com.training.vehicleservice.pojo.VehicleRequest;
 import com.training.vehicleservice.service.VehicleService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.server.mvc.WebMvcLinkBuilder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 
@@ -21,6 +24,7 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
 @RestController
 @RequestMapping("/api")
+@Slf4j
 public class VehicleController {
 
     @Autowired
@@ -30,6 +34,13 @@ public class VehicleController {
     @GetMapping("/vehicles")
     public List<Vehicle> getAllVehicles()
     {
+        for(int i=0;i<100;i++)
+        {
+            log.info("VEHICLE SERVICE RUNNING");
+            log.warn("WARNING VEHICLE SERVICE RUNNING");
+            log.error("ERROR VEHICLE SERVICE RUNNING");
+        }
+
         return vehicleService.getAllVehicles();
     }
 
@@ -52,15 +63,21 @@ public class VehicleController {
         throw new VehicleNotFoundException("Vehicle with id: "+id+" not found",ErrorCode.VEHICLE_NOT_FOUND);
     }
 
-    /*@GetMapping("/upload")
-    public ResponseEntity<String> handleFileUpload(@RequestParam("file")MultipartFile multipartFile)
+    @PostMapping("/upload")
+    public ResponseEntity<String> handleFileUpload(@RequestParam("file") MultipartFile file)
     {
-        if(multipartFile.isEmpty())
+        if(file.isEmpty())
         {
             return ResponseEntity.badRequest().body("Please select a file to upload");
         }
-      //  return vehicleService.saveVehiclesFromUploadFile()
-    }*/
+        try {
+            vehicleService.processUploadFile(file);
+            return ResponseEntity.ok().body("Process Successfully");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
 
     @PostMapping("/vehicles")
     public ResponseEntity<VehicleRequest> saveNewVehicle(@RequestBody Vehicle vehicle)
